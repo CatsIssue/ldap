@@ -2,9 +2,47 @@
 
 #include <stdio.h> 
 #include <ldap.h> 
- 
+#include <sasl/sasl.h> 
+
 #define BIND_DN "uid=konstantin,ou=ALL,dc=for_work,dc=com"
 #define HOSTNAME "localhost" 
+typedef struct {
+	char *mech;
+	char *realm;
+	char *authcid;
+	char *passwd;
+	char *authzid;
+	} _sasl_ctx;
+
+static int _sasl_interact(LDAP *ld, unsigned flags, void *defaults, void *interact)
+{
+	const char *p;
+	_sasl_ctx *ctx;
+	sasl_interact_t *in = (sasl_interact_t *)interact;
+		        
+	for ( ; in->id != SASL_CB_LIST_END; in++) {
+		p = NULL;
+		switch(in->id) {
+		case SASL_CB_GETREALM:
+			p = ctx->realm;
+			break;
+		case SASL_CB_AUTHNAME:
+			p = ctx->authcid;
+			break;
+		case SASL_CB_USER:
+			p = ctx->authzid;
+			break;
+		case SASL_CB_PASS:
+			p = ctx->passwd;
+			break;
+		}
+		if (p) {
+			in->result = p;
+			in->len = strlen(p);
+		}
+	}
+	return LDAP_SUCCESS;
+}
 
 int main(int argc, char **argv) 
 {
@@ -15,7 +53,8 @@ int main(int argc, char **argv)
 		char *passwd;
 		char *authzid;
 	} _sasl_ctx;
-
+	
+	
 	// INIT LDAP SESSION 
 	LDAP *ld; // specify ldap structure 
 	int ldap_default_port, version;	// 389 - default LDAP port
@@ -42,7 +81,7 @@ int main(int argc, char **argv)
 	if (ctx->authcid == NULL)  ldap_get_option(ld, LDAP_OPT_X_SASL_AUTHCID, &ctx->authcid);		 
 	if (ctx->authzid == NULL) ldap_get_option(ld, LDAP_OPT_X_SASL_AUTHZID, &ctx->authzid);
 
-	if( ctx->mech == "GSSAPI")
+	if (ctx->mech == NULL) ctx->mech = "GSSAPI";
 	printf("now going on binding to LDAP server: %s:%d\n", ldap_host, ldap_default_port );
 	printf("with DN = %s\n", BIND_DN);
 	
@@ -61,15 +100,15 @@ int main(int argc, char **argv)
 			ctx->mech,
 			NULL,
 			NULL,
-			LDAP_SASL_QUIET,
-			NULL,
-			ctx ); 
+			LDAP_SASL_INTERACTIVE,
+			_sasl_interact,
+			ctx );
 
 
 
 	if ( rc != LDAP_SUCCESS) 
 	{
-		fprintf(stderr, "ERROR ldap_simple_bind_s: %s\n\n", ldap_err2string(rc) /* for output about the error */);
+		fprintf(stderr, "ERROR ldap_sasl_interactive_bind_s: %s\n\n", ldap_err2string(rc) /* for output about the error */);
 		return 1;
 	}
 	else 
