@@ -22,7 +22,8 @@ static int _sasl_interact(LDAP *ld, unsigned flags, void *defaults, void *intera
 	const char *p;
 	return LDAP_SUCCESS;
 
-	sasl_conn_t *ctx;
+	sasl_conn_t *ctx = (sasl_conn_t *)defaults;
+	
 	sasl_interact_t *in = (sasl_interact_t *)interact;
 		        
 	for ( ; in->id != SASL_CB_LIST_END; in++) {
@@ -99,7 +100,7 @@ int main(int argc, char **argv)
 			NULL,
 			NULL,
 			LDAP_SASL_INTERACTIVE,
-			SASL_INTERACT, //_sasl_interact,
+			_sasl_interact, //_sasl_interact,
 			ctx );
 
 
